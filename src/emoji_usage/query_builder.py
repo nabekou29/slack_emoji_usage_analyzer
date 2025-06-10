@@ -19,13 +19,13 @@ def generate_month_starts(months: int) -> List[date]:
     """
     month_starts = []
     current_date = datetime.now().date()
-    
+
     for i in range(months):
         # i ヶ月前の月初を計算
         target_month = current_date - relativedelta(months=i)
         month_start = target_month.replace(day=1)
         month_starts.append(month_start)
-    
+
     logger.debug(f"Generated {len(month_starts)} month periods")
     return month_starts
 
@@ -43,17 +43,17 @@ def build_monthly_queries(emoji_name: str, month_start: date) -> Tuple[str, str]
     """
     # 月の範囲を計算
     month_end = (month_start + relativedelta(months=1)) - relativedelta(days=1)
-    
+
     # 日付文字列の作成
     start_str = month_start.strftime("%Y-%m-%d")
     end_str = month_end.strftime("%Y-%m-%d")
-    
+
     # テキスト検索クエリ（メッセージ内での絵文字使用）
     text_query = f":{emoji_name}: after:{start_str} before:{end_str}"
-    
+
     # リアクション検索クエリ（リアクションとしての絵文字使用）
     reaction_query = f"has::{emoji_name}: after:{start_str} before:{end_str}"
-    
+
     logger.debug(f"Built queries for {emoji_name} in {start_str}")
     return text_query, reaction_query
 
@@ -70,17 +70,17 @@ def validate_query(query: str) -> bool:
     """
     if not query or not isinstance(query, str):
         return False
-    
+
     # 基本的な長さチェック
     if len(query) > 1000:  # Slack APIの制限を考慮
         logger.warning(f"Query too long: {len(query)} characters")
         return False
-    
+
     # 必須要素のチェック
     if ":" not in query:
         logger.warning(f"Query missing emoji pattern: {query}")
         return False
-    
+
     return True
 
 
@@ -99,7 +99,9 @@ def escape_emoji_name(emoji_name: str) -> str:
     return escaped
 
 
-def build_test_queries(emoji_names: List[str], months: int = 1) -> List[Tuple[str, str, str]]:
+def build_test_queries(
+    emoji_names: List[str], months: int = 1
+) -> List[Tuple[str, str, str]]:
     """
     テスト用のクエリリストを構築する
 
@@ -112,11 +114,11 @@ def build_test_queries(emoji_names: List[str], months: int = 1) -> List[Tuple[st
     """
     test_queries = []
     month_starts = generate_month_starts(months)
-    
+
     for emoji_name in emoji_names:
         for month_start in month_starts:
             text_query, reaction_query = build_monthly_queries(emoji_name, month_start)
             test_queries.append((emoji_name, text_query, reaction_query))
-    
+
     logger.info(f"Built {len(test_queries)} test queries")
     return test_queries
