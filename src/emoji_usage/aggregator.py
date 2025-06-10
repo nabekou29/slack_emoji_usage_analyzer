@@ -2,11 +2,17 @@
 
 from typing import List, Optional
 from datetime import date
+from dateutil.relativedelta import relativedelta
 
 from .config import Settings
 from .logging_cfg import logger
 from .emoji_loader import load_emojis, filter_emojis
-from .query_builder import generate_month_starts, build_monthly_queries
+from .query_builder import (
+    generate_month_starts,
+    generate_period_starts,
+    build_monthly_queries,
+    build_period_queries,
+)
 from .slack_client import search_messages_safe, get_workspace_info
 from .csv_writer import write_csv, validate_output_path, backup_existing_file
 
@@ -16,6 +22,7 @@ settings = Settings()
 
 def aggregate_emoji_usage(
     months: Optional[int] = None,
+    interval_months: Optional[int] = None,
     output_path: Optional[str] = None,
     include_standard: bool = True,
     include_custom: bool = True,
@@ -26,6 +33,7 @@ def aggregate_emoji_usage(
 
     Args:
         months: 集計対象月数（Noneの場合は設定値を使用）
+        interval_months: 集計間隔（月数）（Noneの場合は設定値を使用）
         output_path: 出力ファイルパス（Noneの場合は設定値を使用）
         include_standard: 標準絵文字を含むかどうか
         include_custom: カスタム絵文字を含むかどうか
@@ -37,10 +45,12 @@ def aggregate_emoji_usage(
     try:
         # パラメータの設定
         target_months = months or settings.months
+        target_interval = interval_months or settings.interval_months
         target_output = output_path or settings.output_path
 
         logger.info("Starting emoji usage aggregation")
         logger.info(f"Target months: {target_months}")
+        logger.info(f"Interval months: {target_interval}")
         logger.info(f"Output path: {target_output}")
 
         # 出力パスの検証
@@ -72,12 +82,19 @@ def aggregate_emoji_usage(
 
         logger.info(f"Processing {len(emoji_list)} emojis")
 
-        # 月次期間の生成
-        month_periods = generate_month_starts(target_months)
-        logger.info(f"Processing {len(month_periods)} month periods")
-
-        # 集計処理の実行
-        records = _perform_aggregation(emoji_list, month_periods)
+        # 期間の生成
+        if target_interval == 1:
+            # 1ヶ月間隔の場合は従来の方法を使用
+            periods = generate_month_starts(target_months)
+            logger.info(f"Processing {len(periods)} monthly periods")
+            records = _perform_monthly_aggregation(emoji_list, periods)
+        else:
+            # カスタム間隔の場合は新しい方法を使用
+            periods = generate_period_starts(target_months, target_interval)
+            logger.info(
+                f"Processing {len(periods)} periods with {target_interval}-month intervals"
+            )
+            records = _perform_period_aggregation(emoji_list, periods, target_interval)
 
         if not records:
             logger.warning("No records generated")
@@ -88,7 +105,7 @@ def aggregate_emoji_usage(
         write_csv(records, target_output)
 
         # 統計情報のログ出力
-        _log_statistics(records, emoji_list, month_periods)
+        _log_statistics(records, emoji_list, periods)
 
         logger.info("Emoji usage aggregation completed successfully")
         return True
@@ -98,7 +115,7 @@ def aggregate_emoji_usage(
         return False
 
 
-def _perform_aggregation(
+def _perform_monthly_aggregation(
     emoji_list: List[str], month_periods: List[date]
 ) -> List[List]:
     """
@@ -164,6 +181,82 @@ def _perform_aggregation(
                 processed_queries += 2  # 2つのクエリをスキップしたとしてカウント
 
     logger.info(f"Aggregation completed: {len(records)} records generated")
+    return records
+
+
+def _perform_period_aggregation(
+    emoji_list: List[str], period_starts: List[date], interval_months: int
+) -> List[List]:
+    """
+    指定間隔での集計処理を実行する
+
+    Args:
+        emoji_list: 絵文字リスト
+        period_starts: 期間開始日リスト
+        interval_months: 集計間隔（月数）
+
+    Returns:
+        集計結果のレコードリスト
+    """
+    records = []
+    total_queries = len(emoji_list) * len(period_starts) * 2  # テキスト+リアクション
+    processed_queries = 0
+
+    logger.info(f"Total queries to process: {total_queries}")
+
+    for emoji_idx, emoji_name in enumerate(emoji_list):
+        logger.info(f"Processing emoji {emoji_idx + 1}/{len(emoji_list)}: {emoji_name}")
+
+        for period_idx, period_start in enumerate(period_starts):
+            try:
+                # クエリの構築
+                text_query, reaction_query = build_period_queries(
+                    emoji_name, period_start, interval_months
+                )
+
+                # テキスト検索の実行
+                text_count = search_messages_safe(text_query)
+                processed_queries += 1
+
+                # リアクション検索の実行
+                reaction_count = search_messages_safe(reaction_query)
+                processed_queries += 1
+
+                # 合計カウント
+                total_count = text_count + reaction_count
+
+                # 期間文字列の作成（開始月-終了月形式）
+                period_end = period_start + relativedelta(months=interval_months)
+                period_end = period_end - relativedelta(days=1)
+                period_str = f"{period_start.strftime('%Y-%m')} to {period_end.strftime('%Y-%m')}"
+
+                # レコードの追加
+                records.append([emoji_name, period_str, total_count])
+
+                # 進捗ログ
+                if total_count > 0:
+                    logger.info(f"  {period_str}: {total_count} usages")
+                else:
+                    logger.debug(f"  {period_str}: 0 usages")
+
+                # 進捗状況の表示
+                progress = (processed_queries / total_queries) * 100
+                if processed_queries % 10 == 0:  # 10クエリごとに進捗表示
+                    logger.info(
+                        f"Progress: {processed_queries}/{total_queries} queries "
+                        f"({progress:.1f}%)"
+                    )
+
+            except Exception as e:
+                logger.error(f"Error processing {emoji_name} for {period_start}: {e}")
+                # エラーが発生した場合は0でレコードを追加
+                period_end = period_start + relativedelta(months=interval_months)
+                period_end = period_end - relativedelta(days=1)
+                period_str = f"{period_start.strftime('%Y-%m')} to {period_end.strftime('%Y-%m')}"
+                records.append([emoji_name, period_str, 0])
+                processed_queries += 2  # 2つのクエリをスキップしたとしてカウント
+
+    logger.info(f"Period aggregation completed: {len(records)} records generated")
     return records
 
 

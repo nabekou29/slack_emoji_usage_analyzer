@@ -76,6 +76,12 @@ emoji-usage
 # 集計期間を指定（6ヶ月分）
 emoji-usage --months 6
 
+# 3ヶ月間隔で12ヶ月分の集計（四半期ごと）
+emoji-usage --months 12 --interval 3
+
+# 6ヶ月間隔で12ヶ月分の集計（半期ごと）
+emoji-usage --months 12 --interval 6
+
 # 出力ファイル名を指定
 emoji-usage --output my_emoji_usage.csv
 
@@ -97,10 +103,11 @@ emoji-usage --help
 
 ## コマンドラインオプション
 
-| オプション        | 説明                               | 例                    |
-| ----------------- | ---------------------------------- | --------------------- |
-| `--months`, `-m`  | 集計対象月数                       | `--months 6`          |
-| `--output`, `-o`  | 出力ファイルパス                   | `--output report.csv` |
+| オプション          | 説明                               | 例                      |
+| ------------------- | ---------------------------------- | ----------------------- |
+| `--months`, `-m`    | 集計対象月数                       | `--months 6`            |
+| `--interval`, `-i`  | 集計間隔（月数）                   | `--interval 3`          |
+| `--output`, `-o`    | 出力ファイルパス                   | `--output report.csv`   |
 | `--only-standard` | 標準絵文字のみ対象                 | `--only-standard`     |
 | `--only-custom`   | カスタム絵文字のみ対象             | `--only-custom`       |
 | `--no-standard`   | 標準絵文字を除外                   | `--no-standard`       |
@@ -117,6 +124,7 @@ emoji-usage --help
 | `MIN_INTERVAL_SEC` | 5.0               | API呼び出し間隔（秒）          |
 | `MAX_RETRY`        | 3                 | 429エラー時の最大リトライ回数  |
 | `MONTHS`           | 12                | 集計対象期間（月数）           |
+| `INTERVAL_MONTHS`  | 1                 | 集計間隔（月数）               |
 | `OUTPUT_PATH`      | "emoji_usage.csv" | 出力ファイルパス               |
 | `LOG_LEVEL`        | "INFO"            | ログレベル                     |
 
@@ -125,7 +133,9 @@ emoji-usage --help
 CSV形式で以下の列が出力されます：
 
 - `emoji`: 絵文字名
-- `month`: 対象月（YYYY-MM形式）
+- `month`: 対象期間
+  - 1ヶ月間隔の場合: `YYYY-MM`形式（例: `2023-01`）
+  - 複数月間隔の場合: `YYYY-MM to YYYY-MM`形式（例: `2023-01 to 2023-03`）
 - `usage_count`: 使用回数
 
 ## 実行時の注意

@@ -29,6 +29,12 @@ def main(
     months: Optional[int] = typer.Option(
         None, "--months", "-m", help=f"集計対象月数 (デフォルト: {settings.months})"
     ),
+    interval: Optional[int] = typer.Option(
+        None,
+        "--interval",
+        "-i",
+        help=f"集計間隔（月数） (デフォルト: {settings.interval_months})",
+    ),
     output: Optional[str] = typer.Option(
         None,
         "--output",
@@ -116,10 +122,17 @@ def main(
 
         # 設定の表示
         target_months = months or settings.months
+        target_interval = interval or settings.interval_months
         target_output = output or settings.output_path
+
+        # 間隔の検証
+        if target_interval <= 0:
+            console.print("[red]Error: 集計間隔は1以上である必要があります[/red]")
+            raise typer.Exit(1)
 
         console.print("[bold blue]Slack絵文字利用集計ツール[/bold blue]")
         console.print(f"集計期間: {target_months}ヶ月")
+        console.print(f"集計間隔: {target_interval}ヶ月")
         console.print(f"出力ファイル: {target_output}")
         console.print(f"標準絵文字: {'✓' if include_standard else '✗'}")
         console.print(f"カスタム絵文字: {'✓' if include_custom else '✗'}")
@@ -137,6 +150,7 @@ def main(
 
         success = aggregate_emoji_usage(
             months=target_months,
+            interval_months=target_interval,
             output_path=target_output,
             include_standard=include_standard,
             include_custom=include_custom,

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     # 集計設定
     months: int = Field(default=12, description="集計対象期間（月数）")
+    interval_months: int = Field(default=1, description="集計間隔（月数）")
     output_path: str = Field(default="emoji_usage.csv", description="出力ファイルパス")
 
     # ログ設定
