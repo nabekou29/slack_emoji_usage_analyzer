@@ -167,6 +167,9 @@ def main(
     except KeyboardInterrupt:
         console.print("\n[yellow]集計が中断されました[/yellow]")
         raise typer.Exit(1)
+    except typer.Exit:
+        # typer.Exitは再raiseして、他の例外処理をスキップ
+        raise
     except Exception as e:
         console.print(f"[red]エラー: {e}[/red]")
         from .logging_cfg import logger
